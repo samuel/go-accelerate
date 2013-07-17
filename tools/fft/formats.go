@@ -21,6 +21,7 @@ var sampleFormats = map[string]samplerMaker{
 	"le16s":  newRealS16Sampler,
 	"le16sc": newComplexS16Sampler,
 	"le32fc": newComplexF32Sampler,
+	"le64fc": newComplexF64Sampler,
 }
 
 type complexU8Sampler struct {
@@ -144,6 +145,47 @@ func (smp *complexF32Sampler) SampleSize() int {
 
 func (smp *complexF32Sampler) Description() string {
 	return "Little-endian 32-bit float complex (interleaved)"
+}
+
+type complexF64Sampler struct {
+	buf []byte
+}
+
+func newComplexF64Sampler() sampler {
+	return &complexF64Sampler{}
+}
+
+func (smp *complexF64Sampler) Read(rd io.Reader, data accel.DSPSplitComplex) error {
+	if smp.buf == nil && len(smp.buf) < len(data.Real)*16 {
+		smp.buf = make([]byte, len(data.Real)*16)
+	}
+	n, err := rd.Read(smp.buf[:len(data.Real)*16])
+	if err != nil {
+		return err
+	}
+	for i := 0; i < len(data.Real); i++ {
+		j := i * 16
+		if j <= n-8 {
+			data.Real[i] = float32(math.Float64frombits(binary.LittleEndian.Uint64(smp.buf[j : j+8])))
+			j += 8
+		} else {
+			data.Real[i] = 0.0
+		}
+		if j <= n-8 {
+			data.Imag[i] = float32(math.Float64frombits(binary.LittleEndian.Uint64(smp.buf[j : j+8])))
+		} else {
+			data.Imag[i] = 0.0
+		}
+	}
+	return nil
+}
+
+func (smp *complexF64Sampler) SampleSize() int {
+	return 16
+}
+
+func (smp *complexF64Sampler) Description() string {
+	return "Little-endian 64-bit float complex (interleaved)"
 }
 
 type realS16Sampler struct {
