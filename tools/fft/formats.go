@@ -18,6 +18,7 @@ type sampler interface {
 
 var sampleFormats = map[string]samplerMaker{
 	"8uc":    newComplexU8Sampler,
+	"le16s":  newRealS16Sampler,
 	"le16sc": newComplexS16Sampler,
 	"le32fc": newComplexF32Sampler,
 }
@@ -82,17 +83,16 @@ func (smp *complexS16Sampler) Read(rd io.Reader, data accel.DSPSplitComplex) err
 	for i := 0; i < len(data.Real); i++ {
 		j := i * 4
 		if j < n-1 {
-			data.Real[i] = float32(int16(int(smp.buf[j]) & (int(smp.buf[j+1]) << 8)))
+			data.Real[i] = float32(int16(int(smp.buf[j]) | (int(smp.buf[j+1]) << 8)))
 			j += 2
 		} else {
 			data.Real[i] = 0.0
 		}
 		if j < n-1 {
-			data.Imag[i] = float32(int16(int(smp.buf[j]) & (int(smp.buf[j+1]) << 8)))
+			data.Imag[i] = float32(int16(int(smp.buf[j]) | (int(smp.buf[j+1]) << 8)))
 		} else {
 			data.Imag[i] = 0.0
 		}
-		println(data.Real[i], data.Imag[i])
 	}
 	return nil
 }
@@ -144,4 +144,42 @@ func (smp *complexF32Sampler) SampleSize() int {
 
 func (smp *complexF32Sampler) Description() string {
 	return "Little-endian 32-bit float complex (interleaved)"
+}
+
+type realS16Sampler struct {
+	buf []byte
+}
+
+func newRealS16Sampler() sampler {
+	return &realS16Sampler{}
+}
+
+// TODO: this is skipping one channel of a stereo pair. should get in "stride" from command like arguments
+func (smp *realS16Sampler) Read(rd io.Reader, data accel.DSPSplitComplex) error {
+	if smp.buf == nil && len(smp.buf) < len(data.Real)*4 {
+		smp.buf = make([]byte, len(data.Real)*4)
+	}
+	n, err := rd.Read(smp.buf[:len(data.Real)*4])
+	if err != nil {
+		return err
+	}
+	for i := 0; i < len(data.Real); i++ {
+		j := i * 4
+		if j < n-1 {
+			data.Real[i] = float32(int16(int(smp.buf[j]) | (int(smp.buf[j+1]) << 8)))
+			j += 2
+		} else {
+			data.Real[i] = 0.0
+		}
+		data.Imag[i] = 0.0
+	}
+	return nil
+}
+
+func (smp *realS16Sampler) SampleSize() int {
+	return 4
+}
+
+func (smp *realS16Sampler) Description() string {
+	return "Little-endian 16-bit signed real"
 }

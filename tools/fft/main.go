@@ -16,14 +16,17 @@ import (
 )
 
 var (
-	flagLog2n        = flag.Int("log2n", 10, "log2n of number of samples for FFT (2^log2n samples)")
-	flagSampleFormat = flag.String("sample.format", "8uc", "Sample format")
-	flagSampleRate   = flag.Float64("sample.rate", 0.0, "Sample rate")
-	flagScale        = flag.Float64("scale", 0.0, "Scale for the magnitude (default is 0.0 which means to use scaleRatio)")
-	flagScaleRatio   = flag.Float64("scaleRatio", 0.5, "Ratio of max magnitude to use as scale (if scale is 0.0)")
-	flagMaxHeight    = flag.Int("maxHeight", 480, "Max height of image.")
-	flagHeight       = flag.Int("height", 0, "Height of output image (default is 0 meaning to make it up to maxHeight or out of samples)")
-	flagWidth        = flag.Int("width", 640, "Width of output image")
+	flagLog2n             = flag.Int("log2n", 10, "log2n of number of samples for FFT (2^log2n samples)")
+	flagLogScale          = flag.Bool("logScale", false, "log scale for magnitudes")
+	flagLogScaleReference = flag.Float64("logScaleReference", 1.0, "log scale reference")
+	flagSampleFormat      = flag.String("sample.format", "8uc", "Sample format")
+	flagSampleRate        = flag.Float64("sample.rate", 0.0, "Sample rate")
+	flagScale             = flag.Float64("scale", 0.0, "Scale for the magnitude (default is 0.0 which means to use scaleRatio)")
+	flagScaleRatio        = flag.Float64("scaleRatio", 0.5, "Ratio of max magnitude to use as scale (if scale is 0.0)")
+	flagMaxHeight         = flag.Int("maxHeight", 480, "Max height of image.")
+	flagHeight            = flag.Int("height", 0, "Height of output image (default is 0 meaning to make it up to maxHeight or out of samples)")
+	flagWidth             = flag.Int("width", 640, "Width of output image")
+	flagWindow            = flag.String("window", "hanning", "Window function (hanning, hamming)")
 )
 
 var gradient = [13]color.RGBA{
@@ -40,6 +43,20 @@ var gradient = [13]color.RGBA{
 	color.RGBA{0x9f, 0x00, 0x00, 0xff},
 	color.RGBA{0x75, 0x00, 0x00, 0xff},
 	color.RGBA{0x4a, 0x00, 0x00, 0xff},
+}
+
+var windowFuncs = map[string]func(n, nSamples int) float32{
+	"hanning": func(n, nSamples int) float32 {
+		return float32(0.5 * (1 - math.Cos(2*math.Pi*float64(n)/float64(nSamples-1))))
+	},
+	"hamming": func(n, nSamples int) float32 {
+		a := 0.54
+		b := 1 - a
+		return float32(a - b*math.Cos(2*math.Pi*float64(n)/float64(nSamples-1)))
+	},
+	"triangle": func(n, nSamples int) float32 {
+		return float32(1 - math.Abs((float64(n)-float64(nSamples-1)/2.0)/(float64(nSamples+1)/2.0)))
+	},
 }
 
 func colorForValue(value float32) color.RGBA {
@@ -122,6 +139,22 @@ func main() {
 	scale := float32(*flagScale)
 	inpath := flag.Arg(0)
 	outpath := flag.Arg(1)
+	windowFunc := windowFuncs[*flagWindow]
+	if windowFunc == nil && *flagWindow != "" {
+		log.Fatal("Unknown window function %s", *flagWindow)
+	}
+	// pre-calculate window
+	var window []float32
+	if windowFunc != nil {
+		window = make([]float32, nSamples)
+		for n := 0; n < nSamples; n++ {
+			window[n] = windowFunc(n, nSamples)
+		}
+	}
+
+	if *flagLogScale && *flagScaleRatio < 1.0 {
+		*flagScaleRatio = 1.9
+	}
 
 	file, err := os.Open(inpath)
 	if err != nil {
@@ -171,11 +204,22 @@ func main() {
 			log.Fatal(err)
 		}
 
+		if windowFunc != nil {
+			for n := 0; n < nSamples; n++ {
+				w := window[n]
+				data.Real[n] *= w
+				data.Imag[n] *= w
+			}
+		}
+
 		fft.Zip(data, 1, log2n, accel.FFTDirectionForward)
 
 		maxM := float32(0.0)
 		for n := 0; n < nSamples; n++ {
 			magnitude := float32(math.Sqrt(float64(data.Real[n]*data.Real[n] + data.Imag[n]*data.Imag[n])))
+			if *flagLogScale {
+				magnitude = float32(math.Log10(float64(magnitude) / *flagLogScaleReference))
+			}
 			if magnitude > maxM {
 				maxM = magnitude
 			}
@@ -188,13 +232,15 @@ func main() {
 		dx := nSamples / width
 		if dx == 0 {
 			dx = width / nSamples
+			// TODO
 		} else {
-			off := y * img.Stride
+			x2 := width/2 - 1
+			yoff := y * img.Stride
 			for x := 0; x < width; x++ {
 				sum := float32(0)
 				n := 0
 				for j := x * dx; j < x*dx+dx && j < nSamples; j++ {
-					sum += data.Real[(j+nSamples/2)%nSamples]
+					sum += data.Real[j]
 					n++
 				}
 				if math.IsInf(float64(sum), 0) {
@@ -204,13 +250,48 @@ func main() {
 				}
 				sum /= float32(n)
 				c := colorForValue(sum * scale)
+				off := yoff + x2*4
 				img.Pix[off] = c.R
 				img.Pix[off+1] = c.G
 				img.Pix[off+2] = c.B
 				img.Pix[off+3] = c.A
-				off += 4
+				x2 = (x2 + 1) % width
 			}
 		}
+	}
+
+	for y := height - 8; y < height; y++ {
+		off := y * img.Stride
+		for x := 0; x < width; x++ {
+			img.Pix[off+x*4] = 0
+			img.Pix[off+x*4+1] = 0
+			img.Pix[off+x*4+2] = 0
+		}
+		xoff := (width / 2) * 4
+		img.Pix[off+xoff] = 0
+		img.Pix[off+xoff+1] = 255
+		img.Pix[off+xoff+2] = 0
+		img.Pix[off+xoff+3] = 255
+		for i := 4; i < 32; i = i * 2 {
+			doff := 4 * width / i
+			xoff = 4*width/2 - doff
+			img.Pix[off+xoff] = 255
+			img.Pix[off+xoff+1] = 255
+			img.Pix[off+xoff+2] = 255
+			img.Pix[off+xoff+3] = 255
+			xoff += doff * 2
+			img.Pix[off+xoff] = 255
+			img.Pix[off+xoff+1] = 255
+			img.Pix[off+xoff+2] = 255
+			img.Pix[off+xoff+3] = 255
+		}
+	}
+	sampleRate := *flagSampleRate
+	if sampleRate != 0.0 {
+		fmt.Printf("Sampler rate: %f Hz\n", sampleRate)
+		fmt.Printf("Sampler rate f/2: %f Hz\n", sampleRate/2.0)
+		fmt.Printf("Sampler rate f/4: %f Hz\n", sampleRate/4.0)
+		fmt.Printf("Sampler rate f/8: %f Hz\n", sampleRate/8.0)
 	}
 
 	outFile, err := os.Create(outpath)
