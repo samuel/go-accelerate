@@ -140,7 +140,7 @@ func main() {
 	inpath := flag.Arg(0)
 	outpath := flag.Arg(1)
 	windowFunc := windowFuncs[*flagWindow]
-	if windowFunc == nil && *flagWindow != "" {
+	if windowFunc == nil && *flagWindow != "" && *flagWindow != "none" {
 		log.Fatal("Unknown window function %s", *flagWindow)
 	}
 	// pre-calculate window
