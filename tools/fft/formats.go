@@ -2,226 +2,149 @@ package main
 
 import (
 	"encoding/binary"
-	"io"
 	"math"
 
 	"github.com/samuel/go-accelerate"
 )
 
-type samplerMaker func() sampler
-
 type sampler interface {
-	Read(rd io.Reader, data accel.DSPSplitComplex) error
+	Transform(buf []byte, data accel.DSPSplitComplex)
 	Description() string
 	SampleSize() int // Return the size of a sample in bytes
 }
 
-var sampleFormats = map[string]samplerMaker{
-	"8uc":    newComplexU8Sampler,
-	"le16s":  newRealS16Sampler,
-	"le16sc": newComplexS16Sampler,
-	"le32fc": newComplexF32Sampler,
-	"le64fc": newComplexF64Sampler,
+var sampleFormats = map[string]sampler{
+	"8uc":    complexU8Sampler(1),
+	"le16s":  realLES16Sampler(1),
+	"le16sc": complexS16Sampler(1),
+	"32fc":   complexF32Sampler(1),
+	"le32fc": complexLEF32Sampler(1),
+	"64fc":   complexF64Sampler(1),
+	"le64fc": complexLEF64Sampler(1),
 }
 
-type complexU8Sampler struct {
-	buf []byte
-}
+type complexU8Sampler int
 
-func newComplexU8Sampler() sampler {
-	return &complexU8Sampler{}
-}
-
-func (smp *complexU8Sampler) Read(rd io.Reader, data accel.DSPSplitComplex) error {
-	if smp.buf == nil && len(smp.buf) < len(data.Real)*2 {
-		smp.buf = make([]byte, len(data.Real)*2)
-	}
-	n, err := rd.Read(smp.buf[:len(data.Real)*2])
-	if err != nil {
-		return err
-	}
+func (smp complexU8Sampler) Transform(buf []byte, data accel.DSPSplitComplex) {
 	for i := 0; i < len(data.Real); i++ {
 		j := i * 2
-		if j < n {
-			data.Real[i] = float32(smp.buf[j]) - 128.0
-			j++
-		} else {
-			data.Real[i] = 0.0
-		}
-		if j < n {
-			data.Imag[i] = float32(smp.buf[j]) - 128.0
-		} else {
-			data.Imag[i] = 0.0
-		}
+		data.Real[i] = float32(buf[j]) - 128.0
+		data.Imag[i] = float32(buf[j+1]) - 128.0
 	}
-	return nil
 }
 
-func (smp *complexU8Sampler) SampleSize() int {
+func (smp complexU8Sampler) SampleSize() int {
 	return 2
 }
 
-func (smp *complexU8Sampler) Description() string {
+func (smp complexU8Sampler) Description() string {
 	return "8-bit unsigned complex (interleaved)"
 }
 
-type complexS16Sampler struct {
-	buf []byte
-}
+type complexS16Sampler int
 
-func newComplexS16Sampler() sampler {
-	return &complexS16Sampler{}
-}
-
-func (smp *complexS16Sampler) Read(rd io.Reader, data accel.DSPSplitComplex) error {
-	if smp.buf == nil && len(smp.buf) < len(data.Real)*4 {
-		smp.buf = make([]byte, len(data.Real)*4)
-	}
-	n, err := rd.Read(smp.buf[:len(data.Real)*4])
-	if err != nil {
-		return err
-	}
+func (smp complexS16Sampler) Transform(buf []byte, data accel.DSPSplitComplex) {
 	for i := 0; i < len(data.Real); i++ {
 		j := i * 4
-		if j < n-1 {
-			data.Real[i] = float32(int16(int(smp.buf[j]) | (int(smp.buf[j+1]) << 8)))
-			j += 2
-		} else {
-			data.Real[i] = 0.0
-		}
-		if j < n-1 {
-			data.Imag[i] = float32(int16(int(smp.buf[j]) | (int(smp.buf[j+1]) << 8)))
-		} else {
-			data.Imag[i] = 0.0
-		}
+		data.Real[i] = float32(int16(int(buf[j]) | (int(buf[j+1]) << 8)))
+		data.Imag[i] = float32(int16(int(buf[j+2]) | (int(buf[j+3]) << 8)))
 	}
-	return nil
 }
 
-func (smp *complexS16Sampler) SampleSize() int {
+func (smp complexS16Sampler) SampleSize() int {
 	return 4
 }
 
-func (smp *complexS16Sampler) Description() string {
-	return "Little-endian 16-bit signed complex (interleaved)"
+func (smp complexS16Sampler) Description() string {
+	return "Little-endian 16-bit signed (byte-128) complex (interleaved)"
 }
 
-type complexF32Sampler struct {
-	buf []byte
-}
+type complexLEF32Sampler int
 
-func newComplexF32Sampler() sampler {
-	return &complexF32Sampler{}
-}
-
-func (smp *complexF32Sampler) Read(rd io.Reader, data accel.DSPSplitComplex) error {
-	if smp.buf == nil && len(smp.buf) < len(data.Real)*8 {
-		smp.buf = make([]byte, len(data.Real)*8)
-	}
-	n, err := rd.Read(smp.buf[:len(data.Real)*8])
-	if err != nil {
-		return err
-	}
+func (smp complexLEF32Sampler) Transform(buf []byte, data accel.DSPSplitComplex) {
 	for i := 0; i < len(data.Real); i++ {
 		j := i * 8
-		if j <= n-4 {
-			data.Real[i] = math.Float32frombits(binary.LittleEndian.Uint32(smp.buf[j : j+4]))
-			j += 4
-		} else {
-			data.Real[i] = 0.0
-		}
-		if j <= n-4 {
-			data.Imag[i] = math.Float32frombits(binary.LittleEndian.Uint32(smp.buf[j : j+4]))
-		} else {
-			data.Imag[i] = 0.0
-		}
+		data.Real[i] = math.Float32frombits(binary.LittleEndian.Uint32(buf[j : j+4]))
+		data.Imag[i] = math.Float32frombits(binary.LittleEndian.Uint32(buf[j+4 : j+8]))
 	}
-	return nil
 }
 
-func (smp *complexF32Sampler) SampleSize() int {
+func (smp complexLEF32Sampler) SampleSize() int {
 	return 8
 }
 
-func (smp *complexF32Sampler) Description() string {
+func (smp complexLEF32Sampler) Description() string {
 	return "Little-endian 32-bit float complex (interleaved)"
 }
 
-type complexF64Sampler struct {
-	buf []byte
+type complexF32Sampler int
+
+func (smp complexF32Sampler) Transform(buf []byte, data accel.DSPSplitComplex) {
+	accel.Ctoz_byte(buf, data, 2, 1)
 }
 
-func newComplexF64Sampler() sampler {
-	return &complexF64Sampler{}
+func (smp complexF32Sampler) SampleSize() int {
+	return 8
 }
 
-func (smp *complexF64Sampler) Read(rd io.Reader, data accel.DSPSplitComplex) error {
-	if smp.buf == nil && len(smp.buf) < len(data.Real)*16 {
-		smp.buf = make([]byte, len(data.Real)*16)
-	}
-	n, err := rd.Read(smp.buf[:len(data.Real)*16])
-	if err != nil {
-		return err
-	}
+func (smp complexF32Sampler) Description() string {
+	return "Native-endian 32-bit float complex (interleaved)"
+}
+
+type complexLEF64Sampler int
+
+func (smp complexLEF64Sampler) Transform(buf []byte, data accel.DSPSplitComplex) {
 	for i := 0; i < len(data.Real); i++ {
 		j := i * 16
-		if j <= n-8 {
-			data.Real[i] = float32(math.Float64frombits(binary.LittleEndian.Uint64(smp.buf[j : j+8])))
-			j += 8
-		} else {
-			data.Real[i] = 0.0
-		}
-		if j <= n-8 {
-			data.Imag[i] = float32(math.Float64frombits(binary.LittleEndian.Uint64(smp.buf[j : j+8])))
-		} else {
-			data.Imag[i] = 0.0
-		}
+		data.Real[i] = float32(math.Float64frombits(binary.LittleEndian.Uint64(buf[j : j+8])))
+		data.Imag[i] = float32(math.Float64frombits(binary.LittleEndian.Uint64(buf[j+8 : j+16])))
 	}
-	return nil
 }
 
-func (smp *complexF64Sampler) SampleSize() int {
+func (smp complexLEF64Sampler) SampleSize() int {
 	return 16
 }
 
-func (smp *complexF64Sampler) Description() string {
+func (smp complexLEF64Sampler) Description() string {
 	return "Little-endian 64-bit float complex (interleaved)"
 }
 
-type realS16Sampler struct {
-	buf []byte
+type complexF64Sampler int
+
+func (smp complexF64Sampler) Transform(buf []byte, data accel.DSPSplitComplex) {
+	accel.Vdpsp_byte(buf, data.Real, 2, 1)
+	accel.Vdpsp_byte(buf[8:], data.Imag, 2, 1)
 }
 
-func newRealS16Sampler() sampler {
-	return &realS16Sampler{}
+func (smp complexF64Sampler) SampleSize() int {
+	return 16
 }
+
+func (smp complexF64Sampler) Description() string {
+	return "Native-endian 64-bit float complex (interleaved)"
+}
+
+type realLES16Sampler int
 
 // TODO: this is skipping one channel of a stereo pair. should get in "stride" from command like arguments
-func (smp *realS16Sampler) Read(rd io.Reader, data accel.DSPSplitComplex) error {
-	if smp.buf == nil && len(smp.buf) < len(data.Real)*4 {
-		smp.buf = make([]byte, len(data.Real)*4)
-	}
-	n, err := rd.Read(smp.buf[:len(data.Real)*4])
-	if err != nil {
-		return err
-	}
+func (smp realLES16Sampler) Transform(buf []byte, data accel.DSPSplitComplex) {
+	n := len(buf)
 	for i := 0; i < len(data.Real); i++ {
 		j := i * 4
 		if j < n-1 {
-			data.Real[i] = float32(int16(int(smp.buf[j]) | (int(smp.buf[j+1]) << 8)))
+			data.Real[i] = float32(int16(int(buf[j]) | (int(buf[j+1]) << 8)))
 			j += 2
 		} else {
 			data.Real[i] = 0.0
 		}
 		data.Imag[i] = 0.0
 	}
-	return nil
 }
 
-func (smp *realS16Sampler) SampleSize() int {
+func (smp realLES16Sampler) SampleSize() int {
 	return 4
 }
 
-func (smp *realS16Sampler) Description() string {
+func (smp realLES16Sampler) Description() string {
 	return "Little-endian 16-bit signed real"
 }

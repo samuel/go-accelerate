@@ -111,7 +111,7 @@ func usage() {
 	flag.PrintDefaults()
 	fmt.Printf("\nSample formats:\n")
 	for name, maker := range sampleFormats {
-		fmt.Printf("  %s: %s\n", name, maker().Description())
+		fmt.Printf("  %s: %s\n", name, maker.Description())
 	}
 	os.Exit(1)
 }
@@ -122,13 +122,12 @@ func main() {
 		usage()
 	}
 
-	sampleMaker := sampleFormats[*flagSampleFormat]
-	if sampleMaker == nil {
+	sampler := sampleFormats[*flagSampleFormat]
+	if sampler == nil {
 		println("ERROR: unknown sample format", *flagSampleFormat)
 		println()
 		usage()
 	}
-	sampler := sampleMaker()
 
 	log2n := *flagLog2n
 	nSamples := 1 << uint(log2n)
@@ -197,11 +196,20 @@ func main() {
 
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 
+	buf := make([]byte, sampler.SampleSize()*nSamples)
 	for y := 0; y < height; y++ {
-		if err := sampler.Read(file, data); err == io.EOF {
+		n, err := file.Read(buf)
+		if err == io.EOF {
 			break
 		} else if err != nil {
 			log.Fatal(err)
+		}
+
+		n /= sampler.SampleSize()
+		sampler.Transform(buf[:n*sampler.SampleSize()], data)
+		if n != nSamples {
+			accel.Vclr(data.Real[n:], 1)
+			accel.Vclr(data.Imag[n:], 1)
 		}
 
 		if windowFunc != nil {
