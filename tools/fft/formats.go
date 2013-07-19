@@ -26,11 +26,15 @@ var sampleFormats = map[string]sampler{
 type complexU8Sampler int
 
 func (smp complexU8Sampler) Transform(buf []byte, data accel.DSPSplitComplex) {
-	for i := 0; i < len(data.Real); i++ {
-		j := i * 2
-		data.Real[i] = float32(buf[j]) - 128.0
-		data.Imag[i] = float32(buf[j+1]) - 128.0
-	}
+	// for i := 0; i < len(data.Real); i++ {
+	// 	j := i * 2
+	// 	data.Real[i] = float32(buf[j]) - 128.0
+	// 	data.Imag[i] = float32(buf[j+1]) - 128.0
+	// }
+	accel.Vfltu8(buf, data.Real, 2, 1)
+	accel.Vfltu8(buf[1:], data.Imag, 2, 1)
+	accel.Vsadd(data.Real, 1, -128.0, data.Real, 1)
+	accel.Vsadd(data.Imag, 1, -128.0, data.Imag, 1)
 }
 
 func (smp complexU8Sampler) SampleSize() int {

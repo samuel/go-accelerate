@@ -22,6 +22,21 @@ type DSPSplitComplex struct {
 	Imag []float32
 }
 
+type WindowFlag int
+
+const (
+	WindowFlagHannDenorm WindowFlag = C.vDSP_HANN_DENORM // creates a denormalized window.
+	WindowFlagHannNorm   WindowFlag = C.vDSP_HANN_NORM   // creates a normalized window.
+	WindowFlagHalfWindow WindowFlag = C.vDSP_HALF_WINDOW // creates only the first (N+1)/2 points.
+)
+
+type DBFlag int
+
+const (
+	DBFlagPower     DBFlag = 0
+	DBFlagAmplitude DBFlag = 1
+)
+
 const (
 	FFTRadix2 FFTRadix = C.kFFTRadix2
 	FFTRadix3 FFTRadix = C.kFFTRadix3
@@ -60,6 +75,17 @@ func (fs *FFTSetup) Zip(ioData DSPSplitComplex, stride, log2n int, direction FFT
 	splitComplex.realp = (*C.float)(&ioData.Real[0])
 	splitComplex.imagp = (*C.float)(&ioData.Imag[0])
 	C.vDSP_fft_zip(fs.cFFTSetup, &splitComplex, C.vDSP_Stride(stride), C.vDSP_Length(log2n), C.FFTDirection(direction))
+}
+
+// Computes an out-of-place single-precision complex discrete Fourier transform of the input vector, either from the time domain to the frequency domain (forward) or from the frequency domain to the time domain (inverse).
+func (fs *FFTSetup) Zop(input DSPSplitComplex, inputStride int, output DSPSplitComplex, outputStride int, log2n int, direction FFTDirection) {
+	var inC C.DSPSplitComplex
+	inC.realp = (*C.float)(&input.Real[0])
+	inC.imagp = (*C.float)(&input.Imag[0])
+	var outC C.DSPSplitComplex
+	outC.realp = (*C.float)(&output.Real[0])
+	outC.imagp = (*C.float)(&output.Imag[0])
+	C.vDSP_fft_zop(fs.cFFTSetup, &inC, C.vDSP_Stride(inputStride), &outC, C.vDSP_Stride(outputStride), C.vDSP_Length(log2n), C.FFTDirection(direction))
 }
 
 // Converts an array of signed 8-bit integers to single-precision floating-point values.
@@ -108,7 +134,7 @@ func Ctoz_byte(src []byte, dest DSPSplitComplex, srcStride, destStride int) {
 }
 
 // Copies the contents of a split complex vector Z to an interleaved complex vector C; single precision.
-func Ztoc(src DSPSplitComplex, dest []complex64, srcStride, destStride int) {
+func Ztoc(src DSPSplitComplex, srcStride int, dest []complex64, destStride int) {
 	var splitComplex C.DSPSplitComplex
 	splitComplex.realp = (*C.float)(&src.Real[0])
 	splitComplex.imagp = (*C.float)(&src.Imag[0])
@@ -116,7 +142,7 @@ func Ztoc(src DSPSplitComplex, dest []complex64, srcStride, destStride int) {
 }
 
 // Copies the contents of a split complex vector Z to an interleaved complex vector C; single precision.
-func Ztoc_float(src DSPSplitComplex, dest []float32, srcStride, destStride int) {
+func Ztoc_float(src DSPSplitComplex, srcStride int, dest []float32, destStride int) {
 	var splitComplex C.DSPSplitComplex
 	splitComplex.realp = (*C.float)(&src.Real[0])
 	splitComplex.imagp = (*C.float)(&src.Imag[0])
@@ -124,7 +150,7 @@ func Ztoc_float(src DSPSplitComplex, dest []float32, srcStride, destStride int) 
 }
 
 // Copies the contents of a split complex vector Z to an interleaved complex vector C; single precision. Operate on a byte buffer which contains complex64
-func Ztoc_byte(src DSPSplitComplex, dest []byte, srcStride, destStride int) {
+func Ztoc_byte(src DSPSplitComplex, srcStride int, dest []byte, destStride int) {
 	var splitComplex C.DSPSplitComplex
 	splitComplex.realp = (*C.float)(&src.Real[0])
 	splitComplex.imagp = (*C.float)(&src.Imag[0])
@@ -134,6 +160,11 @@ func Ztoc_byte(src DSPSplitComplex, dest []byte, srcStride, destStride int) {
 // Vector clear; single precision.
 func Vclr(vec []float32, stride int) {
 	C.vDSP_vclr((*C.float)(&vec[0]), (C.vDSP_Stride)(stride), (C.vDSP_Length)(len(vec)/stride))
+}
+
+// Vector fill; single precision.
+func Vfill(value float32, output []float32, stride int) {
+	C.vDSP_vfill((*C.float)(&value), (*C.float)(&output[0]), (C.vDSP_Stride)(stride), (C.vDSP_Length)(len(output)/stride))
 }
 
 // Convolution with decimation; single precision.
@@ -201,4 +232,67 @@ func Vfix16_byte(input []float32, inputStride int, output []byte, outputStride i
 // Vector scalar multiply and scalar add; single precision.
 func Vsmsa(input []float32, inputStride int, mult, add float32, output []float32, outputStride int) {
 	C.vDSP_vsmsa((*C.float)(&input[0]), C.vDSP_Stride(inputStride), (*C.float)(&mult), (*C.float)(&add), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), C.vDSP_Length(len(output)/outputStride))
+}
+
+// Complex vector absolute values; single precision.
+func Zvabs(input DSPSplitComplex, inputStride int, output []float32, outputStride int) {
+	var in C.DSPSplitComplex
+	in.realp = (*C.float)(&input.Real[0])
+	in.imagp = (*C.float)(&input.Imag[0])
+	C.vDSP_zvabs(&in, C.vDSP_Stride(inputStride), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), C.vDSP_Length(len(output)/outputStride))
+}
+
+// Vector maximum value; single precision.
+func Maxv(input []float32, stride int) float32 {
+	var out C.float
+	C.vDSP_maxv((*C.float)(&input[0]), C.vDSP_Stride(stride), &out, C.vDSP_Length(len(input)/stride))
+	return float32(out)
+}
+
+// Multiplies vector A by vector B and leaves the result in vector C; single precision.
+func Vmul(input1 []float32, stride1 int, input2 []float32, stride2 int, output []float32, outputStride int) {
+	C.vDSP_vmul((*C.float)(&input1[0]), C.vDSP_Stride(stride1), (*C.float)(&input2[0]), C.vDSP_Stride(stride2), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), C.vDSP_Length(len(output)/outputStride))
+}
+
+// Vector scalar add; single precision.
+func Vsadd(input []float32, inputStride int, add float32, output []float32, outputStride int) {
+	C.vDSP_vsadd((*C.float)(&input[0]), C.vDSP_Stride(inputStride), (*C.float)(&add), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), C.vDSP_Length(len(output)/outputStride))
+}
+
+// Vector scalar divide; single precision.
+func Vsdiv(input []float32, inputStride int, divisor float32, output []float32, outputStride int) {
+	C.vDSP_vsdiv((*C.float)(&input[0]), C.vDSP_Stride(inputStride), (*C.float)(&divisor), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), C.vDSP_Length(len(output)/outputStride))
+}
+
+// Vector negative values; single precision.
+func Vneg(input []float32, inputStride int, output []float32, outputStride int) {
+	C.vDSP_vneg((*C.float)(&input[0]), C.vDSP_Stride(inputStride), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), C.vDSP_Length(len(output)/outputStride))
+}
+
+// Vector convert power or amplitude to decibels; single precision.
+// α * log10(input(n)/zeroReference) [α is 20 if Amplitude, or 10 if F is Power]
+func Vdbcon(input []float32, inputStride int, zeroReference float32, output []float32, outputStride int, flag DBFlag) {
+	C.vDSP_vdbcon((*C.float)(&input[0]), C.vDSP_Stride(inputStride), (*C.float)(&zeroReference), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), C.vDSP_Length(len(output)/outputStride), C.uint(flag))
+}
+
+// Vector mean value; single precision.
+func Meanv(input []float32, stride int) float32 {
+	var mean C.float
+	C.vDSP_meanv((*C.float)(&input[0]), C.vDSP_Stride(stride), &mean, C.vDSP_Length(len(input)/stride))
+	return float32(mean)
+}
+
+// Creates a single-precision Hanning window.
+func HannWindow(output []float32, flag WindowFlag) {
+	C.vDSP_hann_window((*C.float)(&output[0]), C.vDSP_Length(len(output)), C.int(flag))
+}
+
+// Creates a single-precision Hamming window.
+func HammWindow(output []float32, flag WindowFlag) {
+	C.vDSP_hamm_window((*C.float)(&output[0]), C.vDSP_Length(len(output)), C.int(flag))
+}
+
+// Creates a single-precision Blackman window.
+func BlkmanWindow(output []float32, flag WindowFlag) {
+	C.vDSP_blkman_window((*C.float)(&output[0]), C.vDSP_Length(len(output)), C.int(flag))
 }

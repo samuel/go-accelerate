@@ -5,6 +5,16 @@ import (
 	"testing"
 )
 
+const maxFloatDiffErr = 1e-4
+
+func almostEqual32(a, b, err float32) bool {
+	return almostEqual64(float64(a), float64(b), float64(err))
+}
+
+func almostEqual64(a, b, err float64) bool {
+	return math.Abs(a-b) < err
+}
+
 func TestVfltu8(t *testing.T) {
 	input := []byte{4, 127, 250, 190}
 	output := make([]float32, 8)
@@ -110,3 +120,16 @@ func TestZtoc_float(t *testing.T) {
 // 	src = lowPassReal(src, 3, 2)
 // 	t.Logf("%+v", src)
 // }
+
+// Vector scalar divide; single precision.
+func TestVsdiv(t *testing.T) {
+	input := []float32{1.0, 2.0, 3.0, 4.0, 5.0}
+	output := make([]float32, len(input))
+	Vsdiv(input, 1, 3.0, output, 1)
+	for i := 0; i < len(output); i++ {
+		expected := input[i] / 3.0
+		if !almostEqual32(output[i], expected, maxFloatDiffErr) {
+			t.Errorf("Expected %f/3.0 to return %f instead of %f", input[i], expected, output[i])
+		}
+	}
+}
