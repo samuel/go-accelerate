@@ -23,7 +23,7 @@ func TestVfltu8(t *testing.T) {
 		output[i] = float32(math.NaN())
 	}
 
-	Vfltu8(input, output, 1, 1)
+	Vfltu8(input, 1, output, 1)
 	for i, x := range input {
 		expected := float32(x)
 		if expected != output[i] {
@@ -35,7 +35,7 @@ func TestVfltu8(t *testing.T) {
 		output[i] = float32(math.NaN())
 	}
 
-	Vfltu8(input, output, 2, 1)
+	Vfltu8(input, 2, output, 1)
 	for i := 0; i < len(input); i += 2 {
 		expected := float32(input[i])
 		if expected != output[i/2] {
@@ -59,7 +59,7 @@ func TestZtoc(t *testing.T) {
 	for i := 0; i < len(output); i++ {
 		output[i] = complex(float32(math.NaN()), float32(math.NaN()))
 	}
-	Ztoc(split, output[:n], 1, 2)
+	Ztoc(split, 1, output[:n], 2)
 	for i := 0; i < n; i++ {
 		expected := complex(split.Real[i], split.Imag[i])
 		if output[i] != expected {
@@ -78,7 +78,7 @@ func TestZtoc_float(t *testing.T) {
 	for i := 0; i < len(output); i++ {
 		output[i] = float32(math.NaN())
 	}
-	Ztoc_float(split, output[:n*2], 1, 2)
+	Ztoc_float(split, 1, output[:n*2], 2)
 	for i := 0; i < n; i++ {
 		out := complex(output[i*2], output[i*2+1])
 		expected := complex(split.Real[i], split.Imag[i])
