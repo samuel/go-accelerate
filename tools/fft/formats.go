@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"math"
 
-	"github.com/samuel/go-accelerate"
+	"github.com/samuel/go-accelerate/accel"
 )
 
 type sampler interface {

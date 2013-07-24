@@ -13,7 +13,7 @@ import (
 	// "time"
 	// "unsafe"
 
-	"github.com/samuel/go-accelerate"
+	"github.com/samuel/go-accelerate/accel"
 )
 
 var (

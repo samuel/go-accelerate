@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/samuel/go-accelerate"
+	"github.com/samuel/go-accelerate/accel"
 )
 
 func writeImage(img image.Image, name string) error {
