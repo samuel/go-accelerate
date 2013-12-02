@@ -31,8 +31,8 @@ func (smp complexU8Sampler) Transform(buf []byte, data accel.DSPSplitComplex) {
 	// 	data.Real[i] = float32(buf[j]) - 128.0
 	// 	data.Imag[i] = float32(buf[j+1]) - 128.0
 	// }
-	accel.Vfltu8(buf, data.Real, 2, 1)
-	accel.Vfltu8(buf[1:], data.Imag, 2, 1)
+	accel.Vfltu8(buf, 2, data.Real, 1)
+	accel.Vfltu8(buf[1:], 2, data.Imag, 1)
 	accel.Vsadd(data.Real, 1, -128.0, data.Real, 1)
 	accel.Vsadd(data.Imag, 1, -128.0, data.Imag, 1)
 }
@@ -84,7 +84,7 @@ func (smp complexLEF32Sampler) Description() string {
 type complexF32Sampler int
 
 func (smp complexF32Sampler) Transform(buf []byte, data accel.DSPSplitComplex) {
-	accel.Ctoz_byte(buf, data, 2, 1)
+	accel.Ctoz_byte(buf, 2, data, 1)
 }
 
 func (smp complexF32Sampler) SampleSize() int {
@@ -116,8 +116,8 @@ func (smp complexLEF64Sampler) Description() string {
 type complexF64Sampler int
 
 func (smp complexF64Sampler) Transform(buf []byte, data accel.DSPSplitComplex) {
-	accel.Vdpsp_byte(buf, data.Real, 2, 1)
-	accel.Vdpsp_byte(buf[8:], data.Imag, 2, 1)
+	accel.Vdpsp_byte(buf, 2, data.Real, 1)
+	accel.Vdpsp_byte(buf[8:], 2, data.Imag, 1)
 }
 
 func (smp complexF64Sampler) SampleSize() int {
