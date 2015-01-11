@@ -3,6 +3,7 @@ package accel
 import (
 	"math"
 	"testing"
+	"unsafe"
 )
 
 const maxFloatDiffErr = 1e-4
@@ -45,6 +46,44 @@ func TestVfltu8(t *testing.T) {
 	for i := len(input) / 2; i < len(output); i++ {
 		if !math.IsNaN(float64(output[i])) {
 			t.Errorf("Vfltu8 wrote too far for input stride 2 (%d=%f)", i, output[i])
+		}
+	}
+}
+
+func TestVflt16(t *testing.T) {
+	input16 := []int16{-32768, -256, 0, 256, 32767}
+	output := make([]float32, len(input16)*4)
+	for i := 0; i < len(output); i++ {
+		output[i] = float32(math.NaN())
+	}
+	Vflt16(input16, 1, output, 1)
+	for i, x := range input16 {
+		if float32(x) != output[i] {
+			t.Errorf("Vflt16(%d) = %f; want %f", x, output[i], float32(x))
+		}
+	}
+
+	for _, x := range output[len(input16):] {
+		if !math.IsNaN(float64(x)) {
+			t.Fatalf("Vflt16 overwrote the output")
+		}
+	}
+
+	for i := 0; i < len(output); i++ {
+		output[i] = float32(math.NaN())
+	}
+
+	inputBytes := (*[1 << 20]byte)(unsafe.Pointer(&input16[0]))[0 : len(input16)*2 : len(input16)*2]
+	Vflt16_byte(inputBytes, 1, output, 1)
+	for i, x := range input16 {
+		if float32(x) != output[i] {
+			t.Errorf("Vflt16_bytes(%d) = %f; want %f", x, output[i], float32(x))
+		}
+	}
+
+	for _, x := range output[len(input16):] {
+		if !math.IsNaN(float64(x)) {
+			t.Fatalf("Vflt16_byte overwrote the output")
 		}
 	}
 }
@@ -131,5 +170,50 @@ func TestVsdiv(t *testing.T) {
 		if !almostEqual32(output[i], expected, maxFloatDiffErr) {
 			t.Errorf("Expected %f/3.0 to return %f instead of %f", input[i], expected, output[i])
 		}
+	}
+}
+
+func BenchmarkZvabs(b *testing.B) {
+	temp := make([]float32, 64*1024)
+	samples := DSPSplitComplex{
+		Real: temp,
+		Imag: temp,
+	}
+	b.SetBytes(int64(len(temp)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		Zvabs(samples, 1, temp, 1)
+	}
+}
+
+func BenchmarkZvabsD(b *testing.B) {
+	temp := make([]float64, 64*1024)
+	samples := DSPDoubleSplitComplex{
+		Real: temp,
+		Imag: temp,
+	}
+	b.SetBytes(int64(len(temp)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		ZvabsD(samples, 1, temp, 1)
+	}
+}
+
+func BenchmarkVsmsa(b *testing.B) {
+	input := make([]float32, 4096)
+	b.SetBytes(int64(len(input)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		Vsmsa(input, 1, 2.0, 0.0, input, 1)
+	}
+}
+
+func BenchmarkVfix16(b *testing.B) {
+	input := make([]float32, 4096)
+	output := make([]int16, len(input))
+	b.SetBytes(int64(len(input)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		Vfix16(input, 1, output, 1)
 	}
 }

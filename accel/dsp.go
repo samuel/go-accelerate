@@ -3,23 +3,16 @@ package accel
 // #include <Accelerate/Accelerate.h>
 import "C"
 
-import (
-	"errors"
-	"runtime"
-	"unsafe"
-)
-
-var ErrFailedToCreateFFTSetup = errors.New("accel: failed to create FFT setup")
-
-type FFTSetup struct {
-	cFFTSetup C.FFTSetup
-}
-type FFTRadix C.FFTRadix
-type FFTDirection C.FFTDirection
+import "unsafe"
 
 type DSPSplitComplex struct {
 	Real []float32
 	Imag []float32
+}
+
+type DSPDoubleSplitComplex struct {
+	Real []float64
+	Imag []float64
 }
 
 type WindowFlag int
@@ -37,15 +30,6 @@ const (
 	DBFlagAmplitude DBFlag = 1
 )
 
-const (
-	FFTRadix2 FFTRadix = C.kFFTRadix2
-	FFTRadix3 FFTRadix = C.kFFTRadix3
-	FFTRadix5 FFTRadix = C.kFFTRadix5
-
-	FFTDirectionForward FFTDirection = C.kFFTDirection_Forward
-	FFTDirectionInverse FFTDirection = C.kFFTDirection_Inverse
-)
-
 func minLen(size ...int) C.vDSP_Length {
 	min := size[0]
 	for i := 1; i < len(size); i++ {
@@ -54,48 +38,6 @@ func minLen(size ...int) C.vDSP_Length {
 		}
 	}
 	return C.vDSP_Length(min)
-}
-
-func destroyFFTSetup(fftSetup *FFTSetup) {
-	if fftSetup != nil && fftSetup.cFFTSetup != nil {
-		C.vDSP_destroy_fftsetup(fftSetup.cFFTSetup)
-		fftSetup.cFFTSetup = nil
-	}
-}
-
-func CreateFFTSetup(log2n int, radix FFTRadix) (*FFTSetup, error) {
-	fftSetup := C.vDSP_create_fftsetup(C.vDSP_Length(log2n), C.FFTRadix(radix))
-	if fftSetup == nil {
-		return nil, ErrFailedToCreateFFTSetup
-	}
-	setup := &FFTSetup{fftSetup}
-	runtime.SetFinalizer(setup, destroyFFTSetup)
-	return setup, nil
-}
-
-func (fs *FFTSetup) Destroy() {
-	destroyFFTSetup(fs)
-}
-
-// Computes an in-place single-precision complex discrete Fourier transform of the
-// input/output vector signal, either from the time domain to the frequency domain
-// (forward) or from the frequency domain to the time domain (inverse).
-func (fs *FFTSetup) Zip(ioData DSPSplitComplex, stride, log2n int, direction FFTDirection) {
-	var splitComplex C.DSPSplitComplex
-	splitComplex.realp = (*C.float)(&ioData.Real[0])
-	splitComplex.imagp = (*C.float)(&ioData.Imag[0])
-	C.vDSP_fft_zip(fs.cFFTSetup, &splitComplex, C.vDSP_Stride(stride), C.vDSP_Length(log2n), C.FFTDirection(direction))
-}
-
-// Computes an out-of-place single-precision complex discrete Fourier transform of the input vector, either from the time domain to the frequency domain (forward) or from the frequency domain to the time domain (inverse).
-func (fs *FFTSetup) Zop(input DSPSplitComplex, inputStride int, output DSPSplitComplex, outputStride int, log2n int, direction FFTDirection) {
-	var inC C.DSPSplitComplex
-	inC.realp = (*C.float)(&input.Real[0])
-	inC.imagp = (*C.float)(&input.Imag[0])
-	var outC C.DSPSplitComplex
-	outC.realp = (*C.float)(&output.Real[0])
-	outC.imagp = (*C.float)(&output.Imag[0])
-	C.vDSP_fft_zop(fs.cFFTSetup, &inC, C.vDSP_Stride(inputStride), &outC, C.vDSP_Stride(outputStride), C.vDSP_Length(log2n), C.FFTDirection(direction))
 }
 
 // Converts an array of signed 8-bit integers to single-precision floating-point values.
@@ -113,6 +55,26 @@ func Vfltu8(input []byte, inputStride int, output []float32, outputStride int) {
 	C.vDSP_vfltu8((*C.uchar)(&input[0]), C.vDSP_Stride(inputStride), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), minLen(len(input)/inputStride, len(output)/outputStride))
 }
 
+// Converts an array of signed 16-bit integers to single-precision floating-point values.
+func Vflt16(input []int16, inputStride int, output []float32, outputStride int) {
+	C.vDSP_vflt16((*C.short)(&input[0]), C.vDSP_Stride(inputStride), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), minLen(len(input)/inputStride, len(output)/outputStride))
+}
+
+// Converts an array of signed 16-bit integers to single-precision floating-point values.
+func Vflt16_byte(input []byte, inputStride int, output []float32, outputStride int) {
+	C.vDSP_vflt16((*C.short)(unsafe.Pointer(&input[0])), C.vDSP_Stride(inputStride), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), minLen(len(input)/(2*inputStride), len(output)/outputStride))
+}
+
+// Converts an array of signed 32-bit integers to single-precision floating-point values.
+func Vflt32(input []int32, inputStride int, output []float32, outputStride int) {
+	C.vDSP_vflt32((*C.int)(&input[0]), C.vDSP_Stride(inputStride), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), minLen(len(input)/inputStride, len(output)/outputStride))
+}
+
+// Converts an array of signed 16-bit integers to single-precision floating-point values.
+func Vflt32_byte(input []byte, inputStride int, output []float32, outputStride int) {
+	C.vDSP_vflt32((*C.int)(unsafe.Pointer(&input[0])), C.vDSP_Stride(inputStride), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), minLen(len(input)/(4*inputStride), len(output)/outputStride))
+}
+
 // Vector convert double-precision to single-precision.
 func Vdpsp(input []float64, inputStride int, output []float32, outputStride int) {
 	C.vDSP_vdpsp((*C.double)(&input[0]), C.vDSP_Stride(inputStride), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), minLen(len(input)/inputStride, len(output)/outputStride))
@@ -128,7 +90,22 @@ func Ctoz(input []complex64, inputStride int, output DSPSplitComplex, outputStri
 	var splitComplex C.DSPSplitComplex
 	splitComplex.realp = (*C.float)(&output.Real[0])
 	splitComplex.imagp = (*C.float)(&output.Imag[0])
-	C.vDSP_ctoz((*C.DSPComplex)(unsafe.Pointer(&input[0])), C.vDSP_Stride(inputStride), &splitComplex, C.vDSP_Stride(outputStride), C.vDSP_Length(2*len(output.Real)/outputStride))
+	n := 2 * len(output.Real) / outputStride
+	if n2 := 2 * len(input) / inputStride; n2 < n {
+		n = n2
+	}
+	C.vDSP_ctoz((*C.DSPComplex)(unsafe.Pointer(&input[0])), C.vDSP_Stride(inputStride), &splitComplex, C.vDSP_Stride(outputStride), C.vDSP_Length(n))
+}
+
+func Ctoz_float(input []float32, inputStride int, output DSPSplitComplex, outputStride int) {
+	var splitComplex C.DSPSplitComplex
+	splitComplex.realp = (*C.float)(&output.Real[0])
+	splitComplex.imagp = (*C.float)(&output.Imag[0])
+	n := 2 * len(output.Real) / outputStride
+	if n2 := len(input) / inputStride; n2 < n {
+		n = n2
+	}
+	C.vDSP_ctoz((*C.DSPComplex)(unsafe.Pointer(&input[0])), C.vDSP_Stride(inputStride), &splitComplex, C.vDSP_Stride(outputStride), C.vDSP_Length(n))
 }
 
 // Copies the contents of an interleaved complex vector C to a split complex vector Z; single precision. Operate on a byte buffer which contains complex64
@@ -136,7 +113,11 @@ func Ctoz_byte(input []byte, inputStride int, output DSPSplitComplex, outputStri
 	var splitComplex C.DSPSplitComplex
 	splitComplex.realp = (*C.float)(&output.Real[0])
 	splitComplex.imagp = (*C.float)(&output.Imag[0])
-	C.vDSP_ctoz((*C.DSPComplex)(unsafe.Pointer(&input[0])), C.vDSP_Stride(inputStride), &splitComplex, C.vDSP_Stride(outputStride), C.vDSP_Length(2*len(output.Real)/outputStride))
+	n := 2 * len(output.Real) / outputStride
+	if n2 := len(input) / (4 * inputStride); n2 < n {
+		n = n2
+	}
+	C.vDSP_ctoz((*C.DSPComplex)(unsafe.Pointer(&input[0])), C.vDSP_Stride(inputStride), &splitComplex, C.vDSP_Stride(outputStride), C.vDSP_Length(n))
 }
 
 // Copies the contents of a split complex vector Z to an interleaved complex vector C; single precision.
@@ -171,6 +152,16 @@ func Vclr(vec []float32, stride int) {
 // Vector fill; single precision.
 func Vfill(value float32, output []float32, stride int) {
 	C.vDSP_vfill((*C.float)(&value), (*C.float)(&output[0]), (C.vDSP_Stride)(stride), (C.vDSP_Length)(len(output)/stride))
+}
+
+// Vector clip; single precision.
+func Vclip(input []float32, inputStride int, low, high float32, output []float32, outputStride int) {
+	C.vDSP_vclip((*C.float)(&input[0]), C.vDSP_Stride(inputStride), (*C.float)(&low), (*C.float)(&high), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), minLen(len(input)/inputStride, len(output)/outputStride))
+}
+
+// Vector threshold; single precision.
+func Vthr(input []float32, inputStride int, low float32, output []float32, outputStride int) {
+	C.vDSP_vthr((*C.float)(&input[0]), C.vDSP_Stride(inputStride), (*C.float)(&low), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), minLen(len(input)/inputStride, len(output)/outputStride))
 }
 
 // Convolution with decimation; single precision.
@@ -235,9 +226,25 @@ func Vfix16_byte(input []float32, inputStride int, output []byte, outputStride i
 	C.vDSP_vfix16((*C.float)(&input[0]), C.vDSP_Stride(inputStride), (*C.short)(unsafe.Pointer(&output[0])), C.vDSP_Stride(outputStride), C.vDSP_Length(len(output)/2/outputStride))
 }
 
-// Vector scalar multiply and scalar add; single precision.
+// Adds two vectors; single precision.
+func Vadd(input1 []float32, input1Stride int, input2 []float32, input2Stride int, output []float32, outputStride int) {
+	C.vDSP_vadd((*C.float)(&input1[0]), C.vDSP_Stride(input1Stride), (*C.float)(&input2[0]), C.vDSP_Stride(input2Stride), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), minLen(len(input1)/input1Stride, len(input2)/input2Stride, len(output)/outputStride))
+}
+
+// Vsmsa is vector scalar multiply and scalar add; single precision.
+// output[n] = input[n] * mult + add
 func Vsmsa(input []float32, inputStride int, mult, add float32, output []float32, outputStride int) {
 	C.vDSP_vsmsa((*C.float)(&input[0]), C.vDSP_Stride(inputStride), (*C.float)(&mult), (*C.float)(&add), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), minLen(len(input)/inputStride, len(output)/outputStride))
+}
+
+// Vector absolute values; single precision.
+func Vabs(input []float32, inputStride int, output []float32, outputStride int) {
+	C.vDSP_vabs((*C.float)(&input[0]), C.vDSP_Stride(inputStride), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), minLen(len(input)/inputStride, len(output)/outputStride))
+}
+
+// Computes the squared values of vector input and leaves the result in vector result; single precision.
+func Vsq(input []float32, inputStride int, output []float32, outputStride int) {
+	C.vDSP_vsq((*C.float)(&input[0]), C.vDSP_Stride(inputStride), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), minLen(len(input)/inputStride, len(output)/outputStride))
 }
 
 // Complex vector absolute values; single precision.
@@ -248,11 +255,38 @@ func Zvabs(input DSPSplitComplex, inputStride int, output []float32, outputStrid
 	C.vDSP_zvabs(&in, C.vDSP_Stride(inputStride), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), C.vDSP_Length(len(output)/outputStride))
 }
 
+// Complex vector absolute values; double precision.
+func ZvabsD(input DSPDoubleSplitComplex, inputStride int, output []float64, outputStride int) {
+	var in C.DSPDoubleSplitComplex
+	in.realp = (*C.double)(&input.Real[0])
+	in.imagp = (*C.double)(&input.Imag[0])
+	C.vDSP_zvabsD(&in, C.vDSP_Stride(inputStride), (*C.double)(&output[0]), C.vDSP_Stride(outputStride), C.vDSP_Length(len(output)/outputStride))
+}
+
 // Vector maximum value; single precision.
 func Maxv(input []float32, stride int) float32 {
 	var out C.float
 	C.vDSP_maxv((*C.float)(&input[0]), C.vDSP_Stride(stride), &out, C.vDSP_Length(len(input)/stride))
 	return float32(out)
+}
+
+// Vector minimum value; single precision.
+func Minv(input []float32, stride int) float32 {
+	var out C.float
+	C.vDSP_minv((*C.float)(&input[0]), C.vDSP_Stride(stride), &out, C.vDSP_Length(len(input)/stride))
+	return float32(out)
+}
+
+// Vector sum; single precision.
+func Sve(input []float32, inputStride int) float32 {
+	var sum C.float
+	C.vDSP_sve((*C.float)(&input[0]), C.vDSP_Stride(inputStride), &sum, C.vDSP_Length(len(input)/inputStride))
+	return float32(sum)
+}
+
+// Vector linear average; single precision.
+func Vavlin(input []float32, inputStride int, count float32, output []float32, outputStride int) {
+	C.vDSP_vavlin((*C.float)(&input[0]), C.vDSP_Stride(inputStride), (*C.float)(&count), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), C.vDSP_Length(len(output)/outputStride))
 }
 
 // Multiplies vector A by vector B and leaves the result in vector C; single precision.
@@ -275,8 +309,13 @@ func Vneg(input []float32, inputStride int, output []float32, outputStride int) 
 	C.vDSP_vneg((*C.float)(&input[0]), C.vDSP_Stride(inputStride), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), C.vDSP_Length(len(output)/outputStride))
 }
 
+// Vector sliding window sum; single precision.
+func Vswsum(input []float32, inputStride int, output []float32, outputStride, windowLen int) {
+	C.vDSP_vswsum((*C.float)(&input[0]), C.vDSP_Stride(inputStride), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), C.vDSP_Length(len(output)/outputStride), C.vDSP_Length(windowLen))
+}
+
 // Vector convert power or amplitude to decibels; single precision.
-// α * log10(input(n)/zeroReference) [α is 20 if Amplitude, or 10 if F is Power]
+// α * log10(input(n)/zeroReference) [α is 20 if Amplitude (flag=1), or 10 if F is Power (flag=0)]
 func Vdbcon(input []float32, inputStride int, zeroReference float32, output []float32, outputStride int, flag DBFlag) {
 	C.vDSP_vdbcon((*C.float)(&input[0]), C.vDSP_Stride(inputStride), (*C.float)(&zeroReference), (*C.float)(&output[0]), C.vDSP_Stride(outputStride), C.vDSP_Length(len(output)/outputStride), C.uint(flag))
 }

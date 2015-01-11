@@ -21,7 +21,7 @@ var (
 	flagSampleFormat = flag.String("sample.format", "8uc", "Sample format")
 	flagSampleRate   = flag.Float64("sample.rate", 0.0, "Sample rate")
 	flagScale        = flag.Float64("scale", 0.0, "Scale for the magnitude (default is 0.0 which means to use scaleRatio)")
-	flatScaleLinear  = flag.Bool("scale.linear", false, "use a linear scale (default is log)")
+	flagScaleLinear  = flag.Bool("scale.linear", false, "use a linear scale (default is log)")
 	flagScaleRatio   = flag.Float64("scale.ratio", 0.5, "Ratio of max magnitude to use as scale (if scale is 0.0)")
 	flagMaxHeight    = flag.Int("maxHeight", 480, "Max height of image.")
 	flagHeight       = flag.Int("height", 0, "Height of output image (default is 0 meaning to make it up to maxHeight or out of samples)")
@@ -220,7 +220,7 @@ func main() {
 		data.Imag[0] = 0
 		accel.Zvabs(data, 1, data.Real, 1)
 		maxM := accel.Maxv(data.Real, 1)
-		if !*flatScaleLinear {
+		if !*flagScaleLinear {
 			accel.Vsdiv(data.Real, 1, maxM, data.Real, 1)
 			accel.Vvlog10f(data.Real, data.Real)
 			if scale == 0.0 {
