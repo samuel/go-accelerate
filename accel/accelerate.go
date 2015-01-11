@@ -4,7 +4,7 @@ package accel
 // #cgo LDFLAGS: -framework Accelerate
 import "C"
 
-// Reorders the channels in an ARGB8888 image.
+// VImagePermuteChannels_ARGB8888 reorders the channels in an ARGB8888 image.
 //
 // permuteMap:
 //     An array of four 8-bit integers with the values 0, 1, 2, and 3,

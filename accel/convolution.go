@@ -7,7 +7,7 @@ import (
 	"unsafe"
 )
 
-// Sharpens an ARGBFFFF image by undoing a previous convolution that blurred the image, such as diffraction effects in a camera lens.
+// VImageRichardsonLucyDeConvolve_ARGBFFFF sharpens an ARGBFFFF image by undoing a previous convolution that blurred the image, such as diffraction effects in a camera lens.
 func VImageRichardsonLucyDeConvolve_ARGBFFFF(src, dst *VImageBuffer, tempBuffer []byte, roiX, roiY int, kernel, kernel2 []float32, kernelHeight, kernelWidth, kernelHeight2, kernelWidth2 int, backgroundColor [4]float32, iterationCount int, flags VImageFlag) error {
 	var tmpBuf unsafe.Pointer
 	if tempBuffer != nil {
@@ -25,7 +25,7 @@ func VImageRichardsonLucyDeConvolve_ARGBFFFF(src, dst *VImageBuffer, tempBuffer 
 		C.uint32_t(iterationCount), C.vImage_Flags(flags)))
 }
 
-// Sharpens an ARGB8888 image by undoing a previous convolution that blurred the image, such as diffraction effects in a camera lens.
+// VImageRichardsonLucyDeConvolve_ARGB8888 sharpens an ARGB8888 image by undoing a previous convolution that blurred the image, such as diffraction effects in a camera lens.
 func VImageRichardsonLucyDeConvolve_ARGB8888(src, dst *VImageBuffer, tempBuffer []byte, roiX, roiY int, kernel, kernel2 []int16, kernelHeight, kernelWidth, kernelHeight2, kernelWidth2, divisor, divisor2 int, backgroundColor [4]uint8, iterationCount int, flags VImageFlag) error {
 	var tmpBuf unsafe.Pointer
 	if tempBuffer != nil {
@@ -43,7 +43,7 @@ func VImageRichardsonLucyDeConvolve_ARGB8888(src, dst *VImageBuffer, tempBuffer 
 		C.int32_t(divisor2), (*C.uint8_t)(&backgroundColor[0]), C.uint32_t(iterationCount), C.vImage_Flags(flags)))
 }
 
-// Convolves a region of interest within a source image by an M x N kernel, then divides the pixel values by a divisor.
+// VImageConvolve_ARGB8888 convolves a region of interest within a source image by an M x N kernel, then divides the pixel values by a divisor.
 func VImageConvolve_ARGB8888(src, dst *VImageBuffer, tempBuffer []byte, roiX, roiY int, kernel []int16, kernelHeight, kernelWidth, divisor int, backgroundColor [4]uint8, flags VImageFlag) error {
 	var tmpBuf unsafe.Pointer
 	if tempBuffer != nil {

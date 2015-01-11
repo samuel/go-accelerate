@@ -10,8 +10,6 @@ import (
 	"log"
 	"math"
 	"os"
-	// "time"
-	// "unsafe"
 
 	"github.com/samuel/go-accelerate/accel"
 )
@@ -90,25 +88,6 @@ func colorForValue(value float32) color.RGBA {
 	}
 }
 
-// var colorIndex = (int)((_powerSpectrum[i] + _contrast * 50.0 / 25.0) * _gradientPixels.Length / byte.MaxValue);
-// colorIndex = Math.Max(colorIndex, 0);
-// colorIndex = Math.Min(colorIndex, _gradientPixels.Length - 1);
-
-// *ptr++ = _gradientPixels[colorIndex];
-
-// private void BuildGradientVector()
-// {
-// if (_gradientPixels == null || _gradientPixels.Length != ClientRectangle.Height - AxisMargin)
-// {
-//     _gradientPixels = new int[ClientRectangle.Height - AxisMargin - 1];
-// }
-// for (var i = 0; i < _gradientPixels.Length; i++)
-// {
-//     _gradientPixels[_gradientPixels.Length - i - 1] = _buffer.GetPixel(
-// ClientRectangle.Width - AxisMargin / 2, i + AxisMargin / 2 + 1).ToArgb();
-// }
-// }
-
 func usage() {
 	fmt.Println("syntax: fft [options] <input file.samples> <output file.png>")
 	flag.PrintDefaults()
@@ -143,7 +122,7 @@ func main() {
 	outpath := flag.Arg(1)
 	windowFunc := windowFuncs[*flagWindow]
 	if windowFunc == nil && *flagWindow != "" && *flagWindow != "none" {
-		log.Fatal("Unknown window function %s", *flagWindow)
+		log.Fatalf("Unknown window function %s", *flagWindow)
 	}
 	// pre-calculate window
 	var window []float32

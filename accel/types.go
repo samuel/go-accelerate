@@ -210,12 +210,12 @@ func CreateVImageBuffer(width, height, channels, rowBytes int) *VImageBuffer {
 	}
 }
 
-// Return an instance of *image.RGBA that shares the data with the VImageBuffer.
-// No checks are done to guarantee the format matches.
-func (b *VImageBuffer) ToRGBA() *image.RGBA {
+// ToRGBA return an instance of *image.RGBA that shares the data with
+// the VImageBuffer. No checks are done to guarantee the format matches.
+func (vib *VImageBuffer) ToRGBA() *image.RGBA {
 	return &image.RGBA{
-		Pix:    b.Data,
-		Stride: b.RowBytes,
-		Rect:   image.Rect(0, 0, b.Width, b.Height),
+		Pix:    vib.Data,
+		Stride: vib.RowBytes,
+		Rect:   image.Rect(0, 0, vib.Width, vib.Height),
 	}
 }
